@@ -14,7 +14,7 @@ Three small web pages plus a tiny Python backend you run yourself.
 python3 server/server.py
 ```
 
-Python 3 only, no packages to install. On start it prints the local and Wi-Fi URLs and the **host passcode**.
+Needs Python 3.6 or newer, no packages to install (no venv required). On start it prints the local and Wi-Fi URLs and the **host passcode**.
 The passcode is saved in `data/admin_key.txt`; set `CONTEST_ADMIN_KEY=...` to choose your own.
 Other options (environment variables): `PORT` (default 8787), `HOST`, `CONTEST_DATA` (data folder).
 
