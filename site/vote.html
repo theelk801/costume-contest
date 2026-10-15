@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#150E1B">
+<title>Costume Vote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@400;500;600;700&family=Shrikhand&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <h1><span class="hot">Halloween</span> costume vote</h1>
+    <p class="lede" id="lede">Loading the costumes…</p>
+    <div class="row">
+      <span class="pill state setup" id="phase-pill"></span>
+      <span class="pill" id="prog-pill" hidden></span>
+    </div>
+  </header>
+
+  <p class="notice error" id="err" role="alert" hidden></p>
+
+  <section class="wrap" id="ballot" hidden>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Categories"></div>
+    <p class="cat-note" id="cat-note"></p>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden>
+      <h2 id="empty-title"></h2>
+      <p id="empty-text"></p>
+    </div>
+    <button type="button" class="btn btn-ghost" id="next-btn" hidden></button>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var C = window.Contest, h = C.h;
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    lede: $("lede"), phase: $("phase-pill"), prog: $("prog-pill"), err: $("err"), ballot: $("ballot"),
+    tabs: $("tabs"), note: $("cat-note"), grid: $("grid"), empty: $("empty"), emptyTitle: $("empty-title"),
+    emptyText: $("empty-text"), next: $("next-btn")
+  };
+  var voter = C.voterId();
+  var S = { phase: "setup", categories: [], costumes: [], groups: [], myVotes: {}, active: null, busy: false, error: "", loaded: false };
+  var cards = new Map();
+  var tabsSig = "";
+
+  var LEDE = {
+    setup: "Voting opens soon. This page updates by itself when the host opens it.",
+    open: "Pick your favorite in each category. You can skip any category, and tap your pick again to take your vote back. You can change your votes until the host closes voting.",
+    closed: "Voting is closed. Thanks for voting! The host will announce the winners."
+  };
+
+  function costumeMap() {
+    var m = {};
+    S.costumes.forEach(function (c) { m[c.id] = c; });
+    return m;
+  }
+
+  /* What can be voted for in a category: every entry, or every linked set. */
+  function candidatesFor(cat) {
+    var byId = costumeMap();
+    if (cat.kind === "individual") {
+      return S.costumes.map(function (c) {
+        return { key: cat.id + ":i:" + c.id, target: c.id, members: [c], groupName: null };
+      });
+    }
+    return S.groups.map(function (g) {
+      return {
+        key: cat.id + ":g:" + g.id, target: g.id, groupName: g.name || null,
+        members: g.members.map(function (id) { return byId[id]; }).filter(Boolean)
+      };
+    });
+  }
+
+  function memberEl(m) {
+    var img = h("img", { alt: "Costume: " + m.title, decoding: "async" });
+    var src = C.photoUrl(m.thumb || m.photo);
+    if (src) img.src = src;
+    return h("div", { class: "member" },
+      h("div", { class: "photo" }, img, h("span", { class: "stub", text: "No. " + C.pad(m.id) })),
+      h("div", { class: "card-body" },
+        h("h3", { class: "card-title", text: m.title }),
+        h("p", { class: "card-who", text: "Worn by " + m.name }),
+        m.description ? h("p", { class: "card-blurb", text: m.description }) : null
+      )
+    );
+  }
+
+  function makeCard(cat, cd) {
+    var n = cd.members.length;
+    var btn = h("button", { type: "button", class: "btn btn-vote", onclick: function () { castVote(cat, cd.target); } });
+    var el = h("article", { class: "card" + (n > 1 ? " group" : "") },
+      n > 1 ? h("p", { class: "group-note", text: cd.groupName || (n === 2 ? "Pair" : "Group of " + n) }) : null,
+      h("div", { class: "members" }, ...cd.members.map(memberEl)),
+      h("div", { class: "card-foot" }, btn)
+    );
+    return { el: el, btn: btn, n: n, label: cd.groupName || cd.members.map(function (m) { return m.title; }).join(" & ") };
+  }
+
+  function paintCard(card, picked) {
+    var what = card.n === 1 ? "this one" : card.n === 2 ? "this pair" : "this group";
+    card.el.classList.toggle("picked", picked);
+    card.btn.setAttribute("aria-pressed", picked ? "true" : "false");
+    card.btn.setAttribute("aria-label", (picked ? "Remove your vote for " : "Vote for ") + card.label);
+    card.btn.textContent = picked ? "✓ Your vote" : "Vote for " + what;
+    card.btn.disabled = S.busy;
+  }
+
+  function activeCategory() {
+    for (var i = 0; i < S.categories.length; i++) if (S.categories[i].id === S.active) return S.categories[i];
+    return null;
+  }
+
+  function selectCategory(id, scroll) {
+    S.active = id;
+    render();
+    if (scroll) {
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      els.tabs.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    }
+  }
+
+  function renderTabs() {
+    var sig = S.active + "|" + S.categories.map(function (c) { return c.id + ":" + c.name + ":" + (S.myVotes[c.id] !== undefined); }).join(",");
+    if (sig === tabsSig) return;
+    tabsSig = sig;
+    els.tabs.replaceChildren();
+    S.categories.forEach(function (cat) {
+      var voted = S.myVotes[cat.id] !== undefined;
+      els.tabs.append(h("button", {
+        type: "button", class: "tab", role: "tab", "aria-selected": cat.id === S.active ? "true" : "false",
+        onclick: function () { selectCategory(cat.id, false); }
+      }, cat.name, voted ? h("span", { class: "tick", text: "✓", "aria-label": "voted" }) : null));
+    });
+  }
+
+  function render() {
+    els.phase.className = "pill state " + S.phase;
+    els.phase.replaceChildren(h("span", { class: "dot" }), { setup: "Voting opens soon", open: "Voting open", closed: "Voting closed" }[S.phase]);
+    els.lede.textContent = S.loaded ? LEDE[S.phase] : "Loading the costumes…";
+    els.err.hidden = !S.error;
+    els.err.textContent = S.error;
+
+    var open = S.phase === "open";
+    els.ballot.hidden = !open;
+    els.prog.hidden = !open || !S.categories.length;
+    if (!open) return;
+
+    var voted = S.categories.filter(function (c) { return S.myVotes[c.id] !== undefined; }).length;
+    els.prog.textContent = voted + " of " + S.categories.length + " voted";
+
+    if (!S.categories.some(function (c) { return c.id === S.active; })) S.active = S.categories.length ? S.categories[0].id : null;
+    var cat = activeCategory();
+    renderTabs();
+    els.tabs.hidden = !cat;
+    if (!cat) {
+      els.note.textContent = "";
+      showEmpty("No categories yet", "The host hasn't set up any categories. Check back in a moment.");
+      renderCards([], null);
+      els.next.hidden = true;
+      return;
+    }
+
+    els.note.textContent = cat.kind === "individual"
+      ? "Pick your favorite costume for " + cat.name + "."
+      : "Pick your favorite pair or group for " + cat.name + ". Each linked set counts as one choice.";
+
+    var cands = candidatesFor(cat);
+    if (!cands.length) {
+      showEmpty(
+        cat.kind === "individual" ? "No costumes yet" : "No pairs or groups yet",
+        cat.kind === "individual" ? "The host is still adding costumes. They show up here on their own." : "The host hasn't linked any couples or groups yet. They show up here on their own."
+      );
+    } else {
+      els.empty.hidden = true;
+    }
+    renderCards(cands, cat);
+
+    var idx = S.categories.indexOf(cat);
+    var next = S.categories[idx + 1];
+    els.next.hidden = !next;
+    if (next) {
+      els.next.textContent = "Next: " + next.name + " →";
+      els.next.onclick = function () { selectCategory(next.id, true); };
+    }
+  }
+
+  function showEmpty(title, text) {
+    els.empty.hidden = false;
+    els.emptyTitle.textContent = title;
+    els.emptyText.textContent = text;
+  }
+
+  function renderCards(cands, cat) {
+    var keep = {};
+    cands.forEach(function (cd) { keep[cd.key] = true; });
+    cards.forEach(function (card, key) {
+      if (!keep[key]) { card.el.remove(); cards.delete(key); }
+    });
+    var myPick = cat ? S.myVotes[cat.id] : undefined;
+    cands.forEach(function (cd) {
+      var sig = cd.groupName + "|" + cd.members.map(function (m) { return [m.id, m.title, m.name, m.description, m.thumb].join("~"); }).join("|");
+      var card = cards.get(cd.key);
+      if (!card || card.sig !== sig) {
+        var fresh = makeCard(cat, cd);
+        fresh.sig = sig;
+        if (card) card.el.replaceWith(fresh.el);
+        cards.set(cd.key, fresh);
+        card = fresh;
+      }
+      paintCard(card, myPick === cd.target);
+    });
+    var cur = Array.prototype.map.call(els.grid.children, function (el) { return el; });
+    var want = cands.map(function (cd) { return cards.get(cd.key).el; });
+    var same = cur.length === want.length && cur.every(function (el, i) { return el === want[i]; });
+    if (!same) want.forEach(function (el) { els.grid.append(el); });
+    els.grid.hidden = !cands.length;
+  }
+
+  async function castVote(cat, target) {
+    if (S.busy || S.phase !== "open") return;
+    var prev = S.myVotes[cat.id];
+    var clearing = prev === target;
+    S.busy = true;
+    if (clearing) delete S.myVotes[cat.id]; else S.myVotes[cat.id] = target;
+    render();
+    try {
+      await C.api("/api/vote", { method: "POST", body: { voter: voter, categoryId: cat.id, targetId: clearing ? null : target } });
+    } catch (e) {
+      if (prev === undefined) delete S.myVotes[cat.id]; else S.myVotes[cat.id] = prev;
+      C.toast(e.message);
+      if (e.status === 409 || e.status === 404) await refresh();
+    } finally {
+      S.busy = false;
+      render();
+    }
+  }
+
+  async function refresh() {
+    try {
+      var st = await C.api("/api/state?voter=" + encodeURIComponent(voter));
+      S.phase = st.phase; S.categories = st.categories; S.costumes = st.costumes; S.groups = st.groups;
+      if (!S.busy) {
+        S.myVotes = {};
+        Object.keys(st.myVotes || {}).forEach(function (k) { S.myVotes[Number(k)] = st.myVotes[k]; });
+      }
+      S.error = ""; S.loaded = true;
+    } catch (e) {
+      S.error = e.message;
+    }
+    render();
+  }
+
+  render();
+  C.poll(refresh, 8000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#150E1B">
+<title>Add Costumes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@400;500;600;700&family=Shrikhand&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <h1><span class="hot">Add</span> costumes</h1>
+    <nav class="row" aria-label="Host tools">
+      <a class="pill" href="index.html">Home</a>
+      <a class="pill" href="add.html" aria-current="page">Add costumes</a>
+      <a class="pill" href="results.html">Results</a>
+      <a class="pill" href="vote.html">Guest voting page</a>
+      <span class="pill state setup" id="phase-pill"></span>
+    </nav>
+  </header>
+
+  <section class="panel" id="gate" hidden>
+    <h2>Host passcode</h2>
+    <p class="hint">The passcode is printed in the terminal where you started the server.</p>
+    <form id="gate-form" class="gate-form">
+      <input type="password" id="gate-key" autocomplete="current-password" aria-label="Host passcode" placeholder="Passcode">
+      <button type="submit" class="btn btn-primary">Unlock</button>
+    </form>
+    <p class="field-err" id="gate-err" role="alert" hidden></p>
+  </section>
+
+  <div class="wrap" id="tool" hidden>
+    <div class="layout-add">
+      <section class="panel">
+        <form id="entry-form" novalidate>
+          <h2 id="form-title">Add a costume</h2>
+          <div class="form-grid">
+            <div class="photo-field">
+              <input class="visually-hidden" type="file" id="photo-input" accept="image/*">
+              <label class="photo-drop" for="photo-input">
+                <img id="photo-preview" alt="Preview of the costume photo" hidden>
+                <span id="photo-hint">Tap to take or choose a photo of the full look</span>
+              </label>
+              <label class="btn btn-ghost" id="photo-btn" for="photo-input">Choose photo</label>
+              <p class="field-err" id="photo-err" hidden></p>
+            </div>
+            <div class="fields">
+              <div class="field">
+                <label for="f-title">Costume</label>
+                <input type="text" id="f-title" maxlength="80" autocomplete="off" placeholder="Sad cowboy ghost">
+              </div>
+              <div class="field">
+                <label for="f-name">Who's wearing it?</label>
+                <input type="text" id="f-name" maxlength="40" autocomplete="off" placeholder="Dana">
+              </div>
+              <div class="field">
+                <label for="f-desc">Description</label>
+                <textarea id="f-desc" maxlength="500" rows="3" placeholder="Sewed the sheet myself. The boots are real."></textarea>
+                <span class="count" id="desc-count">0/500</span>
+              </div>
+              <div class="field">
+                <label for="f-link">Goes with</label>
+                <select id="f-link"></select>
+                <p class="hint">For couples and groups, add each person as their own entry, then pick someone they go with. Linked sets can win the linked-set categories.</p>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="f-save">Add costume</button>
+            <button type="button" class="btn btn-ghost" id="f-cancel" hidden>Cancel edit</button>
+          </div>
+          <p class="field-err" id="form-err" role="alert" hidden></p>
+        </form>
+      </section>
+
+      <section>
+        <h2 class="section">Entries <span class="pill" id="list-count">0</span></h2>
+        <div class="entries" id="entries"></div>
+        <div class="empty" id="entries-empty" style="margin-top:12px">
+          <h2>No costumes yet</h2>
+          <p>Each entry you add shows up here. Linked couples and groups are grouped together.</p>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Categories</h2>
+      <p class="hint">Guests get one vote in each category. Individual categories list every entry, including people who are part of a couple or group. Linked-set categories list only the pairs and groups you have linked. Changing a category's type clears its votes.</p>
+      <div class="cats" id="cats"></div>
+      <form id="cat-form" class="cat-add" novalidate>
+        <input type="text" id="cat-name" maxlength="40" autocomplete="off" aria-label="New category name" placeholder="New category, like Scariest">
+        <select id="cat-kind" aria-label="Who can win">
+          <option value="individual">Individual costumes</option>
+          <option value="group">Linked sets (couples, groups)</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Add category</button>
+      </form>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var C = window.Contest, h = C.h;
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    gate: $("gate"), gateForm: $("gate-form"), gateKey: $("gate-key"), gateErr: $("gate-err"),
+    tool: $("tool"), phase: $("phase-pill"),
+    form: $("entry-form"), formTitle: $("form-title"),
+    photoInput: $("photo-input"), photoBtn: $("photo-btn"), preview: $("photo-preview"), hint: $("photo-hint"), photoErr: $("photo-err"),
+    fTitle: $("f-title"), fName: $("f-name"), fDesc: $("f-desc"), count: $("desc-count"), fLink: $("f-link"),
+    save: $("f-save"), cancel: $("f-cancel"), formErr: $("form-err"),
+    entries: $("entries"), empty: $("entries-empty"), listCount: $("list-count"),
+    cats: $("cats"), catForm: $("cat-form"), catName: $("cat-name"), catKind: $("cat-kind")
+  };
+  var S = { costumes: [], groups: [], categories: [], phase: "setup", editing: null, photo: null, thumb: null, saving: false };
+
+  /* ---------- small helpers ---------- */
+  function byId(id) {
+    for (var i = 0; i < S.costumes.length; i++) if (S.costumes[i].id === id) return S.costumes[i];
+    return null;
+  }
+  function matesOf(c) {
+    return c.groupId === null || c.groupId === undefined ? [] : S.costumes.filter(function (x) { return x.groupId === c.groupId && x.id !== c.id; });
+  }
+  function no(c) { return "No. " + C.pad(c.id); }
+  function setErr(el, msg) { el.hidden = !msg; el.textContent = msg || ""; }
+  function formErr(msg) { setErr(els.formErr, msg); }
+  function photoErr(msg) { setErr(els.photoErr, msg); }
+  function countDesc() { els.count.textContent = els.fDesc.value.length + "/500"; }
+  function ghostBtn(label, fn, extra) {
+    return h("button", { type: "button", class: "btn btn-ghost btn-sm" + (extra || ""), text: label, onclick: fn });
+  }
+  function fail(e) {
+    if (e && e.status === 401) { C.clearAdminKey(); showGate("Your passcode stopped working. Enter it again."); }
+    else C.toast((e && e.message) || "Something went wrong.");
+  }
+  /* A delete button that needs a second tap within 4 seconds. */
+  function confirmBtn(label, armedLabel, run) {
+    var b = h("button", { type: "button", class: "btn btn-link btn-sm", text: label });
+    var armed = false, timer;
+    b.addEventListener("click", function () {
+      if (!armed) {
+        armed = true; b.textContent = armedLabel;
+        timer = setTimeout(function () { armed = false; b.textContent = label; }, 4000);
+        return;
+      }
+      clearTimeout(timer); armed = false; b.textContent = label;
+      run();
+    });
+    return b;
+  }
+
+  /* ---------- passcode ---------- */
+  function showGate(msg) {
+    els.tool.hidden = true; els.gate.hidden = false;
+    setErr(els.gateErr, msg);
+  }
+  async function unlock() {
+    try { await C.api("/api/admin/check", { admin: true }); }
+    catch (e) {
+      if (e.status === 401) { C.clearAdminKey(); showGate("That passcode didn't work."); }
+      else showGate(e.message);
+      return;
+    }
+    els.gate.hidden = true; els.tool.hidden = false;
+    try { await load(); } catch (e) { fail(e); }
+    resetForm();
+  }
+  els.gateForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var k = els.gateKey.value.trim();
+    if (!k) return;
+    C.setAdminKey(k);
+    unlock();
+  });
+
+  /* ---------- loading and rendering ---------- */
+  async function load() {
+    var st = await C.api("/api/state");
+    S.costumes = st.costumes; S.groups = st.groups; S.categories = st.categories; S.phase = st.phase;
+    renderPhase(); renderEntries(); renderLinkOptions(); renderCats();
+  }
+
+  function renderPhase() {
+    var label = { setup: "Voting not open yet", open: "Voting open", closed: "Voting closed" }[S.phase];
+    els.phase.className = "pill state " + S.phase;
+    els.phase.replaceChildren(h("span", { class: "dot" }), label);
+  }
+
+  function renderLinkOptions(selected) {
+    var keep = selected === undefined ? els.fLink.value : String(selected);
+    els.fLink.replaceChildren(h("option", { value: "", text: "Nobody. This entry stands on its own." }));
+    S.costumes.forEach(function (c) {
+      if (c.id === S.editing) return;
+      els.fLink.append(h("option", { value: String(c.id), text: no(c) + " · " + c.name + " · " + c.title }));
+    });
+    els.fLink.value = keep;
+    if (els.fLink.value !== keep) els.fLink.value = "";
+  }
+
+  function entryEl(c) {
+    var mates = matesOf(c);
+    var ops = h("div", { class: "ops" },
+      ghostBtn("Edit", function () { startEdit(c); }),
+      ghostBtn(mates.length ? "Add another" : "Add partner", function () { startPartner(c); })
+    );
+    if (c.groupId !== null && c.groupId !== undefined) {
+      ops.append(ghostBtn("Unlink", async function () {
+        try { await C.api("/api/costumes/" + c.id + "/unlink", { method: "POST", admin: true }); C.toast(no(c) + " is on its own now."); await load(); }
+        catch (e) { fail(e); }
+      }));
+    }
+    ops.append(confirmBtn("Delete", "Tap again to delete", async function () {
+      try {
+        await C.api("/api/costumes/" + c.id, { method: "DELETE", admin: true });
+        if (S.editing === c.id) resetForm();
+        C.toast("Removed " + no(c) + ".");
+        await load();
+      } catch (e) { fail(e); }
+    }));
+    return h("article", { class: "entry" + (S.editing === c.id ? " editing" : "") },
+      h("img", { class: "thumb", alt: "", src: C.photoUrl(c.thumb || c.photo) }),
+      h("div", { class: "meta" },
+        h("p", { class: "no", text: no(c) }),
+        h("p", { class: "t", text: c.title }),
+        h("p", { class: "w", text: c.name })
+      ),
+      ops
+    );
+  }
+
+  function setEl(g) {
+    var members = g.members.map(byId).filter(Boolean);
+    var input = h("input", { type: "text", id: "gname-" + g.id, maxlength: "60", placeholder: "Group name (optional)", value: g.name || "", "aria-label": "Group name" });
+    var save = ghostBtn("Save name", async function () {
+      try {
+        await C.api("/api/groups/" + g.id, { method: "PUT", body: { name: input.value.trim() }, admin: true });
+        C.toast("Group name saved.");
+        await load();
+      } catch (e) { fail(e); }
+    });
+    var head = h("div", { class: "set-head" }, h("span", { class: "set-label", text: "Linked set of " + members.length }), input, save);
+    var section = h("section", { class: "set" }, head);
+    members.forEach(function (m) { section.append(entryEl(m)); });
+    return section;
+  }
+
+  function renderEntries() {
+    els.entries.replaceChildren();
+    els.empty.hidden = S.costumes.length > 0;
+    els.listCount.textContent = S.costumes.length;
+    var groups = {};
+    S.groups.forEach(function (g) { groups[g.id] = g; });
+    var done = {};
+    S.costumes.forEach(function (c) {
+      if (c.groupId === null || c.groupId === undefined || !groups[c.groupId]) { els.entries.append(entryEl(c)); return; }
+      if (done[c.groupId]) return;
+      done[c.groupId] = true;
+      els.entries.append(setEl(groups[c.groupId]));
+    });
+  }
+
+  /* ---------- the entry form ---------- */
+  function currentExisting() {
+    var c = S.editing ? byId(S.editing) : null;
+    return c ? C.photoUrl(c.photo) : null;
+  }
+  function setPhoto(photo, thumb, existing) {
+    S.photo = photo; S.thumb = thumb;
+    var src = photo || existing;
+    els.preview.hidden = !src;
+    if (src) els.preview.src = src;
+    els.hint.hidden = !!src;
+    els.photoBtn.textContent = src ? "Change photo" : "Choose photo";
+  }
+
+  function resetForm() {
+    S.editing = null;
+    els.fTitle.value = ""; els.fName.value = ""; els.fDesc.value = ""; countDesc();
+    setPhoto(null, null, null);
+    renderLinkOptions("");
+    els.formTitle.textContent = "Add a costume";
+    els.save.textContent = "Add costume";
+    els.cancel.hidden = true;
+    formErr(""); photoErr("");
+    renderEntries();
+  }
+
+  function focusForm() {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    els.form.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    els.fTitle.focus({ preventScroll: true });
+  }
+
+  function startEdit(c) {
+    S.editing = c.id;
+    els.fTitle.value = c.title; els.fName.value = c.name; els.fDesc.value = c.description; countDesc();
+    setPhoto(null, null, C.photoUrl(c.photo));
+    var mates = matesOf(c);
+    renderLinkOptions(mates.length ? mates[0].id : "");
+    els.formTitle.textContent = "Editing " + no(c);
+    els.save.textContent = "Save changes";
+    els.cancel.hidden = false;
+    formErr(""); photoErr("");
+    renderEntries();
+    focusForm();
+  }
+
+  function startPartner(c) {
+    resetForm();
+    els.formTitle.textContent = "Adding someone who goes with " + no(c);
+    renderLinkOptions(c.id);
+    focusForm();
+  }
+
+  els.fDesc.addEventListener("input", countDesc);
+  els.cancel.addEventListener("click", resetForm);
+
+  els.photoInput.addEventListener("change", async function () {
+    var f = els.photoInput.files && els.photoInput.files[0];
+    if (!f) return;
+    photoErr("");
+    els.photoBtn.textContent = "Preparing photo…";
+    try {
+      var r = await C.resizePhoto(f);
+      setPhoto(r.photo, r.thumb, null);
+    } catch (e) {
+      photoErr(e.message || "Couldn't read that photo. Try another one.");
+      setPhoto(S.photo, S.thumb, currentExisting());
+    } finally {
+      els.photoInput.value = "";
+    }
+  });
+
+  els.form.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    if (S.saving) return;
+    var title = els.fTitle.value.trim(), name = els.fName.value.trim(), desc = els.fDesc.value.trim();
+    if (!S.editing && !S.photo) { formErr("Add a photo of the costume."); return; }
+    if (!title) { formErr("Give the costume a name."); els.fTitle.focus(); return; }
+    if (!name) { formErr("Add the name of the person wearing it."); els.fName.focus(); return; }
+    formErr("");
+
+    var body = { title: title, name: name, description: desc };
+    if (S.photo) { body.photo = S.photo; body.thumb = S.thumb; }
+    var current = S.editing ? byId(S.editing) : null;
+    var mates = current ? matesOf(current).map(function (m) { return m.id; }) : [];
+    var pick = els.fLink.value;
+    if (pick === "") { if (mates.length) body.linkWith = null; }
+    else if (mates.indexOf(Number(pick)) === -1) body.linkWith = Number(pick);
+
+    S.saving = true; els.save.disabled = true; els.save.textContent = "Saving…";
+    var wasEditing = S.editing;
+    try {
+      var saved = wasEditing
+        ? await C.api("/api/costumes/" + wasEditing, { method: "PUT", body: body, admin: true })
+        : await C.api("/api/costumes", { method: "POST", body: body, admin: true });
+      C.toast(wasEditing ? "Saved " + no(saved) + "." : "Added " + no(saved) + ": " + saved.name + ".");
+      await load();
+      resetForm();
+    } catch (e) {
+      if (e.status === 401) fail(e); else formErr(e.message);
+    } finally {
+      S.saving = false; els.save.disabled = false;
+      els.save.textContent = S.editing ? "Save changes" : "Add costume";
+    }
+  });
+
+  /* ---------- categories ---------- */
+  async function moveCat(i, delta) {
+    var ids = S.categories.map(function (c) { return c.id; });
+    var j = i + delta;
+    if (j < 0 || j >= ids.length) return;
+    var t = ids[i]; ids[i] = ids[j]; ids[j] = t;
+    try { await C.api("/api/categories/order", { method: "POST", body: { ids: ids }, admin: true }); await load(); }
+    catch (e) { fail(e); }
+  }
+
+  function renderCats() {
+    els.cats.replaceChildren();
+    if (!S.categories.length) {
+      els.cats.append(h("p", { class: "hint", text: "No categories yet. Add the first one below." }));
+      return;
+    }
+    S.categories.forEach(function (cat, i) {
+      var name = h("input", { type: "text", maxlength: "40", value: cat.name, "aria-label": "Category name" });
+      var kind = h("select", { "aria-label": "Who can win" },
+        h("option", { value: "individual", text: "Individual costumes" }),
+        h("option", { value: "group", text: "Linked sets (couples, groups)" })
+      );
+      kind.value = cat.kind;
+      var save = ghostBtn("Save", async function () {
+        try {
+          await C.api("/api/categories/" + cat.id, { method: "PUT", body: { name: name.value.trim(), kind: kind.value }, admin: true });
+          C.toast("Category saved.");
+          await load();
+        } catch (e) { fail(e); }
+      });
+      var up = h("button", { type: "button", class: "btn btn-ghost btn-sm btn-icon", "aria-label": "Move up", text: "↑", disabled: i === 0, onclick: function () { moveCat(i, -1); } });
+      var down = h("button", { type: "button", class: "btn btn-ghost btn-sm btn-icon", "aria-label": "Move down", text: "↓", disabled: i === S.categories.length - 1, onclick: function () { moveCat(i, 1); } });
+      var del = confirmBtn("Delete", "Tap again. This clears its votes.", async function () {
+        try { await C.api("/api/categories/" + cat.id, { method: "DELETE", admin: true }); C.toast("Category deleted."); await load(); }
+        catch (e) { fail(e); }
+      });
+      els.cats.append(h("div", { class: "cat-row" }, name, kind, h("div", { class: "ops" }, save, up, down, del)));
+    });
+  }
+
+  els.catForm.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    var name = els.catName.value.trim();
+    if (!name) { els.catName.focus(); return; }
+    try {
+      await C.api("/api/categories", { method: "POST", body: { name: name, kind: els.catKind.value }, admin: true });
+      els.catName.value = "";
+      C.toast("Added " + name + ".");
+      await load();
+    } catch (e) { fail(e); }
+  });
+
+  /* ---------- start ---------- */
+  if (C.adminKey()) unlock(); else showGate("");
+})();
+</script>
+</body>
+</html>

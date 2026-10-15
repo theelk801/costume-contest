@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#150E1B">
+<title>Halloween Costume Contest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@400;500;600;700&family=Shrikhand&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <h1><span class="hot">Halloween</span> Costume Contest</h1>
+    <p class="lede">Add each costume as guests arrive, let everyone vote from their phone, then read out the winners.</p>
+  </header>
+
+  <div class="tools">
+    <a class="tool" href="add.html">
+      <span class="for">Host</span>
+      <h2>Add costumes</h2>
+      <p>Photo, name and description for each person. Link couples and groups, and set up the categories.</p>
+    </a>
+    <a class="tool" href="vote.html">
+      <span class="for">Guests</span>
+      <h2>Vote</h2>
+      <p>One pick per category, from any phone.</p>
+    </a>
+    <a class="tool" href="results.html">
+      <span class="for">Host</span>
+      <h2>Results</h2>
+      <p>Open and close voting, then see the winners in every category.</p>
+    </a>
+  </div>
+
+  <section class="panel">
+    <h2>Link for guests</h2>
+    <p class="hint">Send this to everyone, or put it in a QR code at the party. The other two tools need your host passcode.</p>
+    <div class="share">
+      <code id="guest-url"></code>
+      <button type="button" class="btn btn-ghost" id="copy-btn">Copy link</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var url = new URL("vote.html", window.location.href).href;
+  var code = document.getElementById("guest-url");
+  var btn = document.getElementById("copy-btn");
+  code.textContent = url;
+
+  function selectText() {
+    var range = document.createRange();
+    range.selectNodeContents(code);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  btn.addEventListener("click", function () {
+    var done = function () { Contest.toast("Link copied."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () { selectText(); Contest.toast("Press and hold to copy the link."); });
+    } else {
+      selectText();
+      Contest.toast("Press and hold to copy the link.");
+    }
+  });
+})();
+</script>
+</body>
+</html>

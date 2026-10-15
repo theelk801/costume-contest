@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#150E1B">
+<title>Contest Results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:wght@400;500;600;700&family=Shrikhand&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <h1><span class="hot">Contest</span> results</h1>
+    <nav class="row" aria-label="Host tools">
+      <a class="pill" href="index.html">Home</a>
+      <a class="pill" href="add.html">Add costumes</a>
+      <a class="pill" href="results.html" aria-current="page">Results</a>
+      <a class="pill" href="vote.html">Guest voting page</a>
+      <span class="pill state setup" id="phase-pill"></span>
+      <span class="pill" id="voters-pill" hidden></span>
+    </nav>
+  </header>
+
+  <section class="panel" id="gate">
+    <h2>Host passcode</h2>
+    <p class="hint">Results are only for the host. The passcode is printed in the terminal where you started the server.</p>
+    <form id="gate-form" class="gate-form">
+      <input type="password" id="gate-key" autocomplete="current-password" aria-label="Host passcode" placeholder="Passcode">
+      <button type="submit" class="btn btn-primary">Unlock</button>
+    </form>
+    <p class="field-err" id="gate-err" role="alert" hidden></p>
+  </section>
+
+  <div class="wrap" id="main" hidden>
+    <section class="host-bar" id="host-bar" aria-label="Host controls"></section>
+    <p class="notice error" id="err" role="alert" hidden></p>
+    <div class="wrap" id="cats"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var C = window.Contest, h = C.h;
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    gate: $("gate"), gateForm: $("gate-form"), gateKey: $("gate-key"), gateErr: $("gate-err"),
+    main: $("main"), phase: $("phase-pill"), voters: $("voters-pill"),
+    hostBar: $("host-bar"), err: $("err"), cats: $("cats")
+  };
+  var S = { data: null, confirmClose: false, busy: false, expanded: {}, error: "", started: false };
+  var lastSig = "", hostKey = "";
+  var TOP = 8;
+
+  function showGate(msg) {
+    els.main.hidden = true; els.gate.hidden = false;
+    els.gateErr.hidden = !msg; els.gateErr.textContent = msg || "";
+  }
+
+  async function unlock() {
+    try { await C.api("/api/admin/check", { admin: true }); }
+    catch (e) {
+      if (e.status === 401) { C.clearAdminKey(); showGate("That passcode didn't work."); }
+      else showGate(e.message);
+      return;
+    }
+    els.gate.hidden = true; els.main.hidden = false;
+    if (!S.started) { S.started = true; C.poll(refresh, 5000); }
+    else refresh();
+  }
+
+  els.gateForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var k = els.gateKey.value.trim();
+    if (!k) return;
+    C.setAdminKey(k);
+    unlock();
+  });
+
+  async function refresh() {
+    try {
+      S.data = await C.api("/api/results", { admin: true });
+      S.error = "";
+    } catch (e) {
+      if (e.status === 401) { C.clearAdminKey(); showGate("Your passcode stopped working. Enter it again."); return; }
+      S.error = e.message;
+    }
+    render();
+  }
+
+  async function setPhase(phase) {
+    if (S.busy) return;
+    S.busy = true; hostKey = "";
+    try {
+      await C.api("/api/phase", { method: "POST", body: { phase: phase }, admin: true });
+      S.confirmClose = false;
+      C.toast(phase === "open" ? "Voting is open." : "Voting is closed.");
+    } catch (e) { C.toast(e.message); }
+    S.busy = false;
+    await refresh();
+  }
+
+  function primary(label, fn) { return h("button", { type: "button", class: "btn btn-primary", text: label, onclick: fn }); }
+  function ghost(label, fn) { return h("button", { type: "button", class: "btn btn-ghost", text: label, onclick: fn }); }
+
+  function renderHost() {
+    var d = S.data;
+    var key = [d ? d.phase : "", S.confirmClose, S.busy].join("|");
+    if (key === hostKey) return;
+    hostKey = key;
+    els.hostBar.replaceChildren();
+    if (!d) return;
+    var note, actions;
+    if (d.phase === "setup") {
+      note = "Voting is not open. Guests who visit are told it opens soon. Open it when all the costumes are in.";
+      actions = [primary("Open voting", function () { setPhase("open"); })];
+    } else if (d.phase === "open") {
+      if (!S.confirmClose) {
+        note = "Guests are voting. The tally below is live and only you can see it.";
+        actions = [primary("Close voting", function () { S.confirmClose = true; hostKey = ""; renderHost(); })];
+      } else {
+        note = "Guests won't be able to vote or change their votes. You can reopen voting afterwards.";
+        actions = [
+          primary("Yes, close voting", function () { setPhase("closed"); }),
+          ghost("Keep voting open", function () { S.confirmClose = false; hostKey = ""; renderHost(); })
+        ];
+      }
+    } else {
+      note = "Voting is closed. These are the final results.";
+      actions = [ghost("Reopen voting", function () { setPhase("open"); })];
+    }
+    els.hostBar.append(
+      h("span", { class: "host-label", text: "Host controls" }),
+      h("p", { class: "host-note", text: note }),
+      h("div", { class: "host-actions" }, ...actions)
+    );
+  }
+
+  function candTitle(cd) { return cd.groupName || cd.members.map(function (m) { return m.title; }).join(" & "); }
+  function candNames(cd) { return C.peopleLabel(cd.members.map(function (m) { return m.name; })); }
+  function votesText(n) { return n + " " + C.plural(n, "vote", "votes"); }
+
+  function winnerCard(cd, tie) {
+    var photos = h("div", { class: "winner-photos" }, ...cd.members.map(function (m) {
+      var img = h("img", { alt: "Costume: " + m.title });
+      var src = C.photoUrl(m.photo || m.thumb);
+      if (src) img.src = src;
+      return h("div", { class: "photo" }, img, h("span", { class: "stub", text: "No. " + C.pad(m.id) }));
+    }));
+    var body = h("div", { class: "winner-body" },
+      h("p", { class: "winner-kicker", text: tie ? "Tied for first" : "Winner" }),
+      h("p", { class: "winner-title", text: candTitle(cd) })
+    );
+    if (cd.members.length > 1) {
+      cd.members.forEach(function (m) {
+        body.append(h("div", { class: "winner-member" }, h("span", { class: "mt", text: m.title }), h("span", { class: "mw", text: "Worn by " + m.name })));
+      });
+    } else {
+      body.append(h("p", { class: "winner-who", text: "Worn by " + cd.members[0].name }));
+    }
+    body.append(h("p", { class: "winner-votes", text: votesText(cd.votes) }));
+    return h("article", { class: "winner-card" }, photos, body);
+  }
+
+  function rankRow(cd, rank, max, isWinner) {
+    var thumbs = h("div", { class: "thumbs" }, ...cd.members.slice(0, 3).map(function (m) {
+      var img = h("img", { alt: "" });
+      var src = C.photoUrl(m.thumb || m.photo);
+      if (src) img.src = src;
+      return img;
+    }));
+    var bar = h("span", {});
+    bar.style.width = (max > 0 ? Math.round(cd.votes / max * 100) : 0) + "%";
+    return h("div", { class: "rank-row" + (isWinner ? " win" : "") },
+      h("span", { class: "rk", text: rank }),
+      thumbs,
+      h("div", { class: "rank-main" },
+        h("div", { class: "rank-head" },
+          h("div", {}, h("p", { class: "rank-title", text: candTitle(cd) }), h("p", { class: "rank-who", text: candNames(cd) })),
+          h("span", { class: "rank-n", text: votesText(cd.votes) })
+        ),
+        h("div", { class: "bar" }, bar)
+      )
+    );
+  }
+
+  function catBlock(cat) {
+    var kids = [h("div", { class: "cat-head" },
+      h("h2", { text: cat.name }),
+      h("span", { class: "cat-meta", text: (cat.kind === "group" ? "Linked sets" : "Individual") + " · " + votesText(cat.totalVotes) })
+    )];
+    if (!cat.candidates.length) {
+      kids.push(h("p", { class: "notice", text: cat.kind === "group" ? "No pairs or groups have been linked yet." : "No entries yet." }));
+    } else if (!cat.winners.length) {
+      kids.push(h("p", { class: "notice", text: "No votes in this category yet." }));
+    } else {
+      var tie = cat.winners.length > 1;
+      kids.push(h("div", { class: "winners" }, ...cat.candidates
+        .filter(function (cd) { return cat.winners.indexOf(cd.targetId) !== -1; })
+        .map(function (cd) { return winnerCard(cd, tie); })));
+    }
+    if (cat.candidates.length) {
+      var max = cat.candidates[0].votes, rank = 0, prev = null;
+      var rows = cat.candidates.map(function (cd, i) {
+        if (cd.votes !== prev) { rank = i + 1; prev = cd.votes; }
+        return { cd: cd, rank: rank };
+      });
+      var shown = S.expanded[cat.id] ? rows : rows.slice(0, TOP);
+      kids.push(h("div", { class: "rank-list" }, ...shown.map(function (r) {
+        return rankRow(r.cd, r.rank, max, max > 0 && cat.winners.indexOf(r.cd.targetId) !== -1);
+      })));
+      if (rows.length > TOP) {
+        kids.push(ghost(S.expanded[cat.id] ? "Show top " + TOP : "Show all " + rows.length, function () {
+          S.expanded[cat.id] = !S.expanded[cat.id];
+          lastSig = "";
+          render();
+        }));
+      }
+    }
+    return h("section", { class: "cat-block" }, ...kids);
+  }
+
+  function render() {
+    var d = S.data;
+    els.err.hidden = !S.error;
+    els.err.textContent = S.error;
+    if (!d) return;
+
+    els.phase.className = "pill state " + d.phase;
+    els.phase.replaceChildren(h("span", { class: "dot" }), { setup: "Voting not open yet", open: "Voting open", closed: "Voting closed" }[d.phase]);
+    els.voters.hidden = false;
+    els.voters.textContent = d.voters + " " + C.plural(d.voters, "person", "people") + " voted";
+    renderHost();
+
+    var sig = JSON.stringify(d) + JSON.stringify(S.expanded);
+    if (sig === lastSig) return;
+    lastSig = sig;
+    els.cats.replaceChildren();
+    if (!d.categories.length) {
+      els.cats.append(h("div", { class: "empty" }, h("h2", { text: "No categories yet" }), h("p", { text: "Add categories on the Add costumes page." })));
+      return;
+    }
+    d.categories.forEach(function (cat) { els.cats.append(catBlock(cat)); });
+  }
+
+  if (C.adminKey()) unlock(); else showGate("");
+})();
+</script>
+</body>
+</html>
