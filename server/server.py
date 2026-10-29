@@ -435,9 +435,7 @@ class Handler(BaseHTTPRequestHandler):
                         if not conn.execute("select 1 from %s where id=?" % table, (target,)).fetchone():
                             raise ApiError(404, "That choice was removed. Pick another.")
                         conn.execute(
-                            "insert into votes(voter, category_id, target_id, updated_at) values(?,?,?,?) "
-                            "on conflict(voter, category_id) do update set "
-                            "target_id=excluded.target_id, updated_at=excluded.updated_at",
+                            "insert or replace into votes(voter, category_id, target_id, updated_at) values(?,?,?,?)",
                             (voter, category_id, target, time.time()),
                         )
                 return self._json(200, {"ok": True})
@@ -458,8 +456,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ApiError(400, "Phase must be setup, open or closed.")
                 with conn:
                     conn.execute(
-                        "insert into settings(key, value) values('phase', ?) "
-                        "on conflict(key) do update set value=excluded.value",
+                        "insert or replace into settings(key, value) values('phase', ?)",
                         (phase,),
                     )
                 return self._json(200, {"phase": phase})
