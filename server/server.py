@@ -440,6 +440,39 @@ class Handler(BaseHTTPRequestHandler):
                         )
                 return self._json(200, {"ok": True})
 
+            if method == "POST" and path == "/api/ballot":
+                # Submit a whole ballot at once: {voter, votes: {categoryId: targetId}}.
+                # The voter's votes become exactly this set (categories left out are cleared),
+                # and either every pick is saved or none are.
+                body = self._read_json()
+                voter = str(body.get("voter", ""))
+                if not VOTER_RE.match(voter):
+                    raise ApiError(400, "Missing voter id. Reload the page and try again.")
+                if get_phase(conn) != "open":
+                    raise ApiError(409, "Voting isn't open right now.")
+                votes = body.get("votes")
+                if not isinstance(votes, dict) or len(votes) > 200:
+                    raise ApiError(400, "Send your picks as {categoryId: choice}.")
+                picks = []
+                for raw_cat, target in votes.items():
+                    if not str(raw_cat).isdigit() or not is_int(target):
+                        raise ApiError(400, "That ballot isn't valid. Reload the page and try again.")
+                    cat = conn.execute("select kind from categories where id=?", (int(raw_cat),)).fetchone()
+                    if not cat:
+                        raise ApiError(404, "A category was removed. Reload the page and check your picks.")
+                    table = "costumes" if cat["kind"] == "individual" else "groups"
+                    if not conn.execute("select 1 from %s where id=?" % table, (target,)).fetchone():
+                        raise ApiError(404, "A choice was removed. Reload the page and check your picks.")
+                    picks.append((int(raw_cat), target))
+                with conn:
+                    conn.execute("delete from votes where voter=?", (voter,))
+                    for category_id, target in picks:
+                        conn.execute(
+                            "insert into votes(voter, category_id, target_id, updated_at) values(?,?,?,?)",
+                            (voter, category_id, target, time.time()),
+                        )
+                return self._json(200, {"ok": True, "myVotes": {str(c): t for c, t in picks}})
+
             # ---- host only
             if method == "GET" and path == "/api/admin/check":
                 self._require_admin()

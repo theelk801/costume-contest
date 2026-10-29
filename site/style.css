@@ -119,6 +119,31 @@ textarea { resize: vertical; min-height: 96px; }
 .member { background: var(--surface); min-width: 0; display: flex; flex-direction: column; }
 .photo { position: relative; aspect-ratio: 4 / 5; max-width: 100%; background: var(--surface-2); }
 .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* vote cards: show the whole photo, centered, in a capped-height box */
+.member .photo { aspect-ratio: auto; height: 230px; display: flex; align-items: center; justify-content: center; background: #0d0814; overflow: hidden; }
+.member .photo img { position: static; inset: auto; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; margin: auto; }
+@media (min-width: 640px) { .member .photo { height: 210px; } }
+
+/* vote page: sticky submit bar and the "votes are in" summary */
+.submit-bar {
+  position: sticky; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 5;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px 12px 18px; background: var(--surface-2); border: 1px solid var(--pumpkin); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+}
+.submit-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.submit-main { font: 700 1rem/1.2 var(--font-body); }
+.submit-sub { font: 500 .75rem/1.3 var(--font-mono); letter-spacing: .03em; color: var(--ink-dim); }
+.submit-bar .btn { flex: 0 0 auto; }
+.done-list { display: flex; flex-direction: column; gap: 10px; }
+.done-list + .btn { margin-top: 18px; }
+.sum-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.sum-row .sum-thumbs { display: flex; flex: 0 0 auto; gap: 2px; }
+.sum-row .sum-thumbs img { width: 44px; height: 55px; object-fit: contain; background: #0d0814; border-radius: 6px; display: block; }
+.sum-row .sum-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sum-cat { font: 500 .72rem/1.2 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--pumpkin); overflow-wrap: anywhere; }
+.sum-pick { font-weight: 600; overflow-wrap: anywhere; }
+.sum-pick.none { font-weight: 400; color: var(--ink-faint); }
 .stub {
   position: absolute; top: 12px; left: 12px; padding: 5px 12px; background: var(--pumpkin); color: var(--on-pumpkin);
   font: 500 .75rem/1 var(--font-mono); letter-spacing: .06em;

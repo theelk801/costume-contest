@@ -26,14 +26,28 @@
   <p class="notice error" id="err" role="alert" hidden></p>
 
   <section class="wrap" id="ballot" hidden>
-    <div class="tabs" id="tabs" role="tablist" aria-label="Categories"></div>
-    <p class="cat-note" id="cat-note"></p>
-    <div class="grid" id="grid"></div>
-    <div class="empty" id="empty" hidden>
-      <h2 id="empty-title"></h2>
-      <p id="empty-text"></p>
+    <div class="wrap" id="vote-view">
+      <div class="tabs" id="tabs" role="tablist" aria-label="Categories"></div>
+      <p class="cat-note" id="cat-note"></p>
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty" hidden>
+        <h2 id="empty-title"></h2>
+        <p id="empty-text"></p>
+      </div>
+      <button type="button" class="btn btn-ghost" id="next-btn" hidden></button>
     </div>
-    <button type="button" class="btn btn-ghost" id="next-btn" hidden></button>
+
+    <section class="panel" id="done" hidden>
+      <h2>Your votes are in &#10003;</h2>
+      <p class="hint">Here is what you picked.</p>
+      <div class="done-list" id="done-list"></div>
+      <button type="button" class="btn btn-primary" id="change-btn">Change my votes</button>
+    </section>
+
+    <div class="submit-bar" id="submit-bar" hidden>
+      <div class="submit-text"><span class="submit-main" id="submit-main"></span><span class="submit-sub" id="submit-sub"></span></div>
+      <button type="button" class="btn btn-primary" id="submit-btn"></button>
+    </div>
   </section>
 </div>
 
@@ -44,19 +58,46 @@
   var $ = function (id) { return document.getElementById(id); };
   var els = {
     lede: $("lede"), phase: $("phase-pill"), prog: $("prog-pill"), err: $("err"), ballot: $("ballot"),
-    tabs: $("tabs"), note: $("cat-note"), grid: $("grid"), empty: $("empty"), emptyTitle: $("empty-title"),
-    emptyText: $("empty-text"), next: $("next-btn")
+    voteView: $("vote-view"), tabs: $("tabs"), note: $("cat-note"), grid: $("grid"), empty: $("empty"),
+    emptyTitle: $("empty-title"), emptyText: $("empty-text"), next: $("next-btn"),
+    done: $("done"), doneList: $("done-list"), change: $("change-btn"),
+    bar: $("submit-bar"), barMain: $("submit-main"), barSub: $("submit-sub"), barBtn: $("submit-btn")
   };
   var voter = C.voterId();
-  var S = { phase: "setup", categories: [], costumes: [], groups: [], myVotes: {}, active: null, busy: false, error: "", loaded: false };
+  /* myVotes = what the server has (submitted). draft = what is picked on screen right now. */
+  var S = {
+    phase: "setup", categories: [], costumes: [], groups: [], myVotes: {}, draft: {},
+    view: "vote", active: null, busy: false, error: "", loaded: false
+  };
   var cards = new Map();
   var tabsSig = "";
 
   var LEDE = {
     setup: "Voting opens soon. This page updates by itself when the host opens it.",
-    open: "Pick your favorite in each category. You can skip any category, and tap your pick again to take your vote back. You can change your votes until the host closes voting.",
+    open: "Tap your favorite in each category, then press Submit when you're done. You can skip any category.",
+    done: "Thanks for voting! Your votes are saved, and you can change them until the host closes voting.",
     closed: "Voting is closed. Thanks for voting! The host will announce the winners."
   };
+
+  /* ---------- small helpers ---------- */
+  function copy(o) { var r = {}; Object.keys(o).forEach(function (k) { r[k] = o[k]; }); return r; }
+  function sameVotes(a, b) {
+    var ka = Object.keys(a).sort(), kb = Object.keys(b).sort();
+    return ka.length === kb.length && ka.every(function (k, i) { return k === kb[i] && a[k] === b[k]; });
+  }
+  function count(o) { return Object.keys(o).length; }
+  function isDirty() { return !sameVotes(S.draft, S.myVotes); }
+
+  var draftStore = {
+    get: function () { try { var v = JSON.parse(localStorage.getItem("contest:draft") || "null"); return v && typeof v === "object" ? v : null; } catch (e) { return null; } },
+    set: function (v) {
+      try {
+        if (v && count(v)) localStorage.setItem("contest:draft", JSON.stringify(v));
+        else localStorage.removeItem("contest:draft");
+      } catch (e) { /* private mode etc: the draft just lives in memory */ }
+    }
+  };
+  function saveDraft() { draftStore.set(isDirty() ? S.draft : null); }
 
   function costumeMap() {
     var m = {};
@@ -80,6 +121,19 @@
     });
   }
 
+  function candTitle(cd) { return cd.groupName || cd.members.map(function (m) { return m.title; }).join(" & "); }
+
+  /* Drop picks whose category or choice has since been removed by the host. */
+  function pruneVotes(votes) {
+    Object.keys(votes).forEach(function (k) {
+      var cat = null;
+      S.categories.forEach(function (c) { if (String(c.id) === k) cat = c; });
+      var ok = !!cat && candidatesFor(cat).some(function (cd) { return cd.target === votes[k]; });
+      if (!ok) delete votes[k];
+    });
+  }
+
+  /* ---------- cards ---------- */
   function memberEl(m) {
     var img = h("img", { alt: "Costume: " + m.title, decoding: "async" });
     var src = C.photoUrl(m.thumb || m.photo);
@@ -96,21 +150,21 @@
 
   function makeCard(cat, cd) {
     var n = cd.members.length;
-    var btn = h("button", { type: "button", class: "btn btn-vote", onclick: function () { castVote(cat, cd.target); } });
+    var btn = h("button", { type: "button", class: "btn btn-vote", onclick: function () { pick(cat, cd.target); } });
     var el = h("article", { class: "card" + (n > 1 ? " group" : "") },
       n > 1 ? h("p", { class: "group-note", text: cd.groupName || (n === 2 ? "Pair" : "Group of " + n) }) : null,
       h("div", { class: "members" }, ...cd.members.map(memberEl)),
       h("div", { class: "card-foot" }, btn)
     );
-    return { el: el, btn: btn, n: n, label: cd.groupName || cd.members.map(function (m) { return m.title; }).join(" & ") };
+    return { el: el, btn: btn, n: n, label: candTitle(cd) };
   }
 
   function paintCard(card, picked) {
     var what = card.n === 1 ? "this one" : card.n === 2 ? "this pair" : "this group";
     card.el.classList.toggle("picked", picked);
     card.btn.setAttribute("aria-pressed", picked ? "true" : "false");
-    card.btn.setAttribute("aria-label", (picked ? "Remove your vote for " : "Vote for ") + card.label);
-    card.btn.textContent = picked ? "✓ Your vote" : "Vote for " + what;
+    card.btn.setAttribute("aria-label", (picked ? "Remove your pick: " : "Choose ") + card.label);
+    card.btn.textContent = picked ? "✓ Your pick" : "Choose " + what;
     card.btn.disabled = S.busy;
   }
 
@@ -129,33 +183,111 @@
   }
 
   function renderTabs() {
-    var sig = S.active + "|" + S.categories.map(function (c) { return c.id + ":" + c.name + ":" + (S.myVotes[c.id] !== undefined); }).join(",");
+    var sig = S.active + "|" + S.categories.map(function (c) { return c.id + ":" + c.name + ":" + (S.draft[c.id] !== undefined); }).join(",");
     if (sig === tabsSig) return;
     tabsSig = sig;
     els.tabs.replaceChildren();
     S.categories.forEach(function (cat) {
-      var voted = S.myVotes[cat.id] !== undefined;
+      var picked = S.draft[cat.id] !== undefined;
       els.tabs.append(h("button", {
         type: "button", class: "tab", role: "tab", "aria-selected": cat.id === S.active ? "true" : "false",
         onclick: function () { selectCategory(cat.id, false); }
-      }, cat.name, voted ? h("span", { class: "tick", text: "✓", "aria-label": "voted" }) : null));
+      }, cat.name, picked ? h("span", { class: "tick", text: "✓", "aria-label": "picked" }) : null));
     });
+  }
+
+  function showEmpty(title, text) {
+    els.empty.hidden = false;
+    els.emptyTitle.textContent = title;
+    els.emptyText.textContent = text;
+  }
+
+  function renderCards(cands, cat) {
+    var keep = {};
+    cands.forEach(function (cd) { keep[cd.key] = true; });
+    cards.forEach(function (card, key) {
+      if (!keep[key]) { card.el.remove(); cards.delete(key); }
+    });
+    var myPick = cat ? S.draft[cat.id] : undefined;
+    cands.forEach(function (cd) {
+      var sig = cd.groupName + "|" + cd.members.map(function (m) { return [m.id, m.title, m.name, m.description, m.thumb].join("~"); }).join("|");
+      var card = cards.get(cd.key);
+      if (!card || card.sig !== sig) {
+        var fresh = makeCard(cat, cd);
+        fresh.sig = sig;
+        if (card) card.el.replaceWith(fresh.el);
+        cards.set(cd.key, fresh);
+        card = fresh;
+      }
+      paintCard(card, myPick === cd.target);
+    });
+    var cur = Array.prototype.map.call(els.grid.children, function (el) { return el; });
+    var want = cands.map(function (cd) { return cards.get(cd.key).el; });
+    var same = cur.length === want.length && cur.every(function (el, i) { return el === want[i]; });
+    if (!same) want.forEach(function (el) { els.grid.append(el); });
+    els.grid.hidden = !cands.length;
+  }
+
+  /* ---------- the "votes are in" summary ---------- */
+  function renderDone() {
+    els.doneList.replaceChildren();
+    S.categories.forEach(function (cat) {
+      var target = S.myVotes[cat.id], cd = null;
+      if (target !== undefined) candidatesFor(cat).forEach(function (c) { if (c.target === target) cd = c; });
+      var kids = [];
+      if (cd) {
+        kids.push(h("div", { class: "sum-thumbs" }, ...cd.members.slice(0, 3).map(function (m) {
+          var img = h("img", { alt: "" });
+          var src = C.photoUrl(m.thumb || m.photo);
+          if (src) img.src = src;
+          return img;
+        })));
+      }
+      kids.push(h("div", { class: "sum-text" },
+        h("span", { class: "sum-cat", text: cat.name }),
+        h("span", { class: "sum-pick" + (cd ? "" : " none"), text: cd ? candTitle(cd) : "No vote (skipped)" })
+      ));
+      els.doneList.append(h("div", { class: "sum-row" }, ...kids));
+    });
+  }
+
+  /* ---------- screen ---------- */
+  function renderBar() {
+    var total = S.categories.length, n = count(S.draft), dirty = isDirty(), hasSaved = count(S.myVotes) > 0;
+    els.barMain.textContent = n + " of " + total + " chosen";
+    els.barSub.textContent = dirty ? "Not submitted yet" : hasSaved ? "Saved ✓" : "Pick your favorites, then submit";
+    if (dirty) {
+      els.barBtn.textContent = S.busy ? "Submitting…" : "Submit my votes";
+      els.barBtn.disabled = S.busy;
+      els.barBtn.onclick = submit;
+    } else if (hasSaved) {
+      els.barBtn.textContent = "Back to my votes";
+      els.barBtn.disabled = false;
+      els.barBtn.onclick = function () { S.view = "done"; render(); window.scrollTo(0, 0); };
+    } else {
+      els.barBtn.textContent = "Submit my votes";
+      els.barBtn.disabled = true;
+      els.barBtn.onclick = null;
+    }
   }
 
   function render() {
     els.phase.className = "pill state " + S.phase;
     els.phase.replaceChildren(h("span", { class: "dot" }), { setup: "Voting opens soon", open: "Voting open", closed: "Voting closed" }[S.phase]);
-    els.lede.textContent = S.loaded ? LEDE[S.phase] : "Loading the costumes…";
+    var open = S.phase === "open";
+    var done = open && S.view === "done";
+    els.lede.textContent = !S.loaded ? "Loading the costumes…" : done ? LEDE.done : LEDE[S.phase];
     els.err.hidden = !S.error;
     els.err.textContent = S.error;
 
-    var open = S.phase === "open";
+    els.prog.hidden = true;
     els.ballot.hidden = !open;
-    els.prog.hidden = !open || !S.categories.length;
     if (!open) return;
 
-    var voted = S.categories.filter(function (c) { return S.myVotes[c.id] !== undefined; }).length;
-    els.prog.textContent = voted + " of " + S.categories.length + " voted";
+    els.done.hidden = !done;
+    els.voteView.hidden = done;
+    els.bar.hidden = done || !S.categories.length;
+    if (done) { renderDone(); return; }
 
     if (!S.categories.some(function (c) { return c.id === S.active; })) S.active = S.categories.length ? S.categories[0].id : null;
     var cat = activeCategory();
@@ -191,51 +323,30 @@
       els.next.textContent = "Next: " + next.name + " →";
       els.next.onclick = function () { selectCategory(next.id, true); };
     }
+    renderBar();
   }
 
-  function showEmpty(title, text) {
-    els.empty.hidden = false;
-    els.emptyTitle.textContent = title;
-    els.emptyText.textContent = text;
-  }
-
-  function renderCards(cands, cat) {
-    var keep = {};
-    cands.forEach(function (cd) { keep[cd.key] = true; });
-    cards.forEach(function (card, key) {
-      if (!keep[key]) { card.el.remove(); cards.delete(key); }
-    });
-    var myPick = cat ? S.myVotes[cat.id] : undefined;
-    cands.forEach(function (cd) {
-      var sig = cd.groupName + "|" + cd.members.map(function (m) { return [m.id, m.title, m.name, m.description, m.thumb].join("~"); }).join("|");
-      var card = cards.get(cd.key);
-      if (!card || card.sig !== sig) {
-        var fresh = makeCard(cat, cd);
-        fresh.sig = sig;
-        if (card) card.el.replaceWith(fresh.el);
-        cards.set(cd.key, fresh);
-        card = fresh;
-      }
-      paintCard(card, myPick === cd.target);
-    });
-    var cur = Array.prototype.map.call(els.grid.children, function (el) { return el; });
-    var want = cands.map(function (cd) { return cards.get(cd.key).el; });
-    var same = cur.length === want.length && cur.every(function (el, i) { return el === want[i]; });
-    if (!same) want.forEach(function (el) { els.grid.append(el); });
-    els.grid.hidden = !cands.length;
-  }
-
-  async function castVote(cat, target) {
+  /* ---------- actions ---------- */
+  function pick(cat, target) {
     if (S.busy || S.phase !== "open") return;
-    var prev = S.myVotes[cat.id];
-    var clearing = prev === target;
-    S.busy = true;
-    if (clearing) delete S.myVotes[cat.id]; else S.myVotes[cat.id] = target;
+    if (S.draft[cat.id] === target) delete S.draft[cat.id]; else S.draft[cat.id] = target;
+    saveDraft();
     render();
+  }
+
+  async function submit() {
+    if (S.busy || S.phase !== "open" || !isDirty()) return;
+    S.busy = true;
+    render();
+    var sent = copy(S.draft);
     try {
-      await C.api("/api/vote", { method: "POST", body: { voter: voter, categoryId: cat.id, targetId: clearing ? null : target } });
+      await C.api("/api/ballot", { method: "POST", body: { voter: voter, votes: sent } });
+      S.myVotes = sent;
+      S.draft = copy(sent);
+      saveDraft();
+      S.view = "done";
+      window.scrollTo(0, 0);
     } catch (e) {
-      if (prev === undefined) delete S.myVotes[cat.id]; else S.myVotes[cat.id] = prev;
       C.toast(e.message);
       if (e.status === 409 || e.status === 404) await refresh();
     } finally {
@@ -244,13 +355,29 @@
     }
   }
 
+  els.change.addEventListener("click", function () { S.view = "vote"; render(); window.scrollTo(0, 0); });
+
   async function refresh() {
     try {
       var st = await C.api("/api/state?voter=" + encodeURIComponent(voter));
       S.phase = st.phase; S.categories = st.categories; S.costumes = st.costumes; S.groups = st.groups;
+      var server = {};
+      Object.keys(st.myVotes || {}).forEach(function (k) { server[Number(k)] = st.myVotes[k]; });
       if (!S.busy) {
-        S.myVotes = {};
-        Object.keys(st.myVotes || {}).forEach(function (k) { S.myVotes[Number(k)] = st.myVotes[k]; });
+        if (!S.loaded) {
+          var stored = draftStore.get(), draft = {};
+          if (stored) Object.keys(stored).forEach(function (k) { if (typeof stored[k] === "number") draft[Number(k)] = stored[k]; });
+          S.myVotes = server;
+          S.draft = stored ? draft : copy(server);
+          pruneVotes(S.draft);
+          S.view = count(server) > 0 && !isDirty() ? "done" : "vote";
+        } else {
+          var clean = !isDirty();
+          S.myVotes = server;
+          if (clean) S.draft = copy(server);
+          pruneVotes(S.draft);
+        }
+        saveDraft();
       }
       S.error = ""; S.loaded = true;
     } catch (e) {
