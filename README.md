@@ -45,7 +45,7 @@ Simplest option: skip S3 entirely. The backend also serves `site/`, so guests ca
 
 Guests load the pages from S3 over the internet, so the backend on your laptop must be reachable from the internet too. A tunnel does that: it gives your laptop a public HTTPS address. S3's website address is plain `http://`, and an `http` page can call an `https` backend, so that works.
 
-Your laptop needs its own internet (phone hotspot or ethernet), must stay awake, and must keep both the server and the tunnel running. Your existing QR code keeps pointing at the S3 pages, and it never changes.
+Your laptop needs its own internet (phone hotspot or ethernet), must stay awake, and must keep both the server and the tunnel running. Your existing QR code keeps pointing at the S3 pages, and it never changes. Anyone who opens the bucket's root address (what the QR code points to) is sent straight to the voting page. To see the host home page from S3, open `index.html?host`; on your own computer (`localhost` or your local network) the home page shows normally.
 
 **1. Start the server** (`python3 server/server.py`) and leave it running.
 

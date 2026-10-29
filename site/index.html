@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#150E1B">
+<script>
+/* Guests scan a QR code that points at this page's address. Anywhere except the host's own computer or network
+   (for example the S3 website), send them straight to voting. Hosts reach this page with index.html?host. */
+(function () {
+  var h = location.hostname;
+  var local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|\[?::1\]?$)/.test(h) || /\.local$/.test(h);
+  if (!local && !/[?&]host(&|=|$)/.test(location.search)) location.replace("vote.html");
+})();
+</script>
 <title>Halloween Costume Contest</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
