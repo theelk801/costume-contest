@@ -2,8 +2,27 @@
 (function () {
   "use strict";
 
-  var API = String(window.CONTEST_API || "").replace(/\/+$/, "");
+  function cleanUrl(u) { return String(u || "").replace(/\/+$/, ""); }
+  var API = cleanUrl(window.CONTEST_API);
   var mem = {};
+
+  /* Where is the backend? A backend.json next to the pages ({"api": "https://..."}) wins, so the address can
+     change without touching config.js or the QR code. If it's missing, config.js's CONTEST_API is used. */
+  var resolving = null;
+  function resolveApi(force) {
+    if (resolving && !force) return resolving;
+    resolving = (async function () {
+      try {
+        var r = await fetch("backend.json?t=" + Date.now(), { cache: "no-store" });
+        if (r.ok) {
+          var j = await r.json();
+          if (j && typeof j.api === "string" && /^https?:\/\//i.test(j.api)) return cleanUrl(j.api);
+        }
+      } catch (e) { /* no backend.json: fall back to config.js */ }
+      return cleanUrl(window.CONTEST_API);
+    })().then(function (a) { API = a; return a; });
+    return resolving;
+  }
 
   function store(key) {
     return {
@@ -51,7 +70,7 @@
   /* api(path, {method, body, admin}) -> parsed JSON. The host passcode is sent only when admin is true. */
   async function api(path, opts) {
     opts = opts || {};
-    var headers = {};
+    var headers = { "ngrok-skip-browser-warning": "1" };
     var init = { method: opts.method || "GET", headers: headers };
     if (opts.body !== undefined) {
       headers["Content-Type"] = "application/json";
@@ -59,9 +78,17 @@
     }
     var key = keyStore.get();
     if (opts.admin && key) headers["X-Admin-Key"] = key;
+    await resolveApi();
     var res;
     try { res = await fetch(API + path, init); }
-    catch (e) { throw apiError("Can't reach the contest server. Check that it's running and that this page points at it.", 0); }
+    catch (e) {
+      /* Maybe the backend moved (a restarted tunnel gets a new address). Look again; if backend.json now says
+         something different, reload so every photo and request uses the new address. */
+      var before = API;
+      await resolveApi(true);
+      if (API !== before) { location.reload(); }
+      throw apiError("Can't reach the contest server. Check that it's running and that this page points at it.", 0);
+    }
     var data = null;
     try { data = await res.json(); } catch (e) {}
     if (!res.ok) throw apiError((data && data.error) || "Something went wrong (" + res.status + ").", res.status);

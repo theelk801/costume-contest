@@ -329,7 +329,7 @@ class Handler(BaseHTTPRequestHandler):
     # -- response helpers
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, ngrok-skip-browser-warning")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         self.send_header("Access-Control-Max-Age", "600")
 
@@ -629,6 +629,9 @@ class Handler(BaseHTTPRequestHandler):
             base, rel = SITE, path.lstrip("/") or "index.html"
             cache = "no-cache"
         target = (base / unquote(rel)).resolve()
+        if path == "/backend.json" and not target.is_file():
+            # Pages look for backend.json to find the backend. Served from here, there's nothing to override.
+            return self._json(200, {})
         if base != target and base not in target.parents or not target.is_file():
             raise ApiError(404, "Not found.")
         ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"

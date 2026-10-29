@@ -5,4 +5,7 @@
 //   window.CONTEST_API = "https://your-tunnel-name.trycloudflare.com";
 //   window.CONTEST_API = "http://192.168.1.20:8787";
 // No trailing slash.
+//
+// A file named backend.json next to these pages overrides this, e.g. {"api": "https://abc.trycloudflare.com"}.
+// That lets you point the pages at a new address by uploading one tiny file, with no edits here.
 window.CONTEST_API = "";

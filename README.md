@@ -41,6 +41,42 @@ Guests' phones must be able to reach the backend:
 
 Simplest option: skip S3 entirely. The backend also serves `site/`, so guests can just open the URL it prints.
 
+## Guests on cellular data (no venue Wi-Fi)
+
+Guests load the pages from S3 over the internet, so the backend on your laptop must be reachable from the internet too. A tunnel does that: it gives your laptop a public HTTPS address. S3's website address is plain `http://`, and an `http` page can call an `https` backend, so that works.
+
+Your laptop needs its own internet (phone hotspot or ethernet), must stay awake, and must keep both the server and the tunnel running. Your existing QR code keeps pointing at the S3 pages, and it never changes.
+
+**1. Start the server** (`python3 server/server.py`) and leave it running.
+
+**2. Start a tunnel** in a second terminal. Easiest is a temporary Cloudflare tunnel (free, no account, install `cloudflared` first):
+
+```
+cloudflared tunnel --url http://localhost:8787
+```
+
+It prints an address like `https://random-words.trycloudflare.com`. That address changes every time you start the tunnel. Cloudflare provides these temporary tunnels for testing, with no uptime promise, so do a rehearsal and keep the tunnel running all night rather than restarting it.
+
+**3. Tell the pages where the backend is.** Pick one:
+
+- *Changing address (temporary tunnel):* create a file named `backend.json` and upload it to the root of your bucket, next to `vote.html`:
+
+  ```
+  echo '{"api": "https://random-words.trycloudflare.com"}' > backend.json
+  aws s3 cp backend.json s3://YOUR-BUCKET/backend.json --content-type application/json --cache-control no-store
+  ```
+
+  (or upload it in the S3 console; it must be publicly readable like the other files). Upload a new one whenever the tunnel address changes. Guests with the page already open find the new address on their own within seconds, so you don't need to re-share anything.
+- *Fixed address (named Cloudflare tunnel or ngrok static domain):* set `window.CONTEST_API` in `config.js` once and upload that. No `backend.json` needed.
+
+If both exist, `backend.json` wins. See `site/backend.json.example`.
+
+**4. Check it before the party.** Open the S3 `vote.html` on a phone with Wi-Fi turned off, and confirm the photos load.
+
+Notes:
+- With ngrok's free plan, a browser warning page can appear. The pages send the header that skips it for data requests, but photos are loaded as ordinary images, so test that photos show up before relying on ngrok.
+- The host pages (`add.html`, `results.html`) work the same way, but it's simplest to use them on the laptop at `http://localhost:8787/`.
+
 ## Data
 
 Everything lives in `data/` (`contest.db` plus `photos/`). Copy the folder to back it up; delete it to start over.
