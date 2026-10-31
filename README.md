@@ -23,7 +23,7 @@ Open the printed URL on your computer, then:
 1. **Add costumes** (`add.html`, passcode required). One entry per person. To make a couple or group, use "Add partner" on an existing entry, or pick "Goes with" in the form. Any size works. Give a linked set an optional group name.
 2. **Categories** (bottom of the same page): rename, reorder, add, delete. Each category is either
    *Individual* (every entry competes, including people in couples) or *Linked sets* (only couples/groups compete, one choice per set).
-   Changing a category's type clears its votes.
+   Changing a category's type clears its votes. Each category can also have a short description, which guests see under the category tabs and which appears on the results page.
 3. **Open voting** on `results.html`. Share the guest link (shown on the home page) as a link or QR code.
 4. **Close voting** when you're ready and read out the winners. Ties are shown as ties. You can reopen voting afterwards.
 

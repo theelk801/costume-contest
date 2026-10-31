@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#150E1B">
+<meta name="theme-color" content="#000000">
 <title>Costume Vote</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -301,9 +301,12 @@
       return;
     }
 
-    els.note.textContent = cat.kind === "individual"
-      ? "Pick your favorite costume for " + cat.name + "."
-      : "Pick your favorite pair or group for " + cat.name + ". Each linked set counts as one choice.";
+    var setHint = cat.kind === "group" ? " Each linked set counts as one choice." : "";
+    els.note.textContent = cat.description
+      ? (/[.!?]$/.test(cat.description) ? cat.description : cat.description + ".") + setHint
+      : cat.kind === "individual"
+        ? "Pick your favorite costume for " + cat.name + "."
+        : "Pick your favorite pair or group for " + cat.name + "." + setHint;
 
     var cands = candidatesFor(cat);
     if (!cands.length) {

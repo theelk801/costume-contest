@@ -122,6 +122,9 @@ def init_db():
             """
         )
         with conn:
+            cols = [r["name"] for r in conn.execute("pragma table_info(categories)")]
+            if "description" not in cols:  # database from before category descriptions
+                conn.execute("alter table categories add column description text not null default ''")
             if not conn.execute("select 1 from settings where key='seeded'").fetchone():
                 for i, (name, kind) in enumerate(DEFAULT_CATEGORIES):
                     conn.execute("insert into categories(name, kind, position) values(?,?,?)", (name, kind, i))
@@ -135,7 +138,7 @@ def get_phase(conn):
 
 def list_categories(conn):
     return [
-        {"id": r["id"], "name": r["name"], "kind": r["kind"]}
+        {"id": r["id"], "name": r["name"], "kind": r["kind"], "description": r["description"]}
         for r in conn.execute("select * from categories order by position, id")
     ]
 
@@ -277,7 +280,11 @@ def parse_category(body):
         raise ApiError(400, "Give the category a name.")
     if kind not in KINDS:
         raise ApiError(400, "Category type must be individual or group.")
-    return name, kind
+    # None means "not sent": leave the stored description alone.
+    description = body.get("description")
+    if description is not None:
+        description = str(description).strip()[:300]
+    return name, kind, description
 
 
 def decode_photo(value):
@@ -497,13 +504,15 @@ class Handler(BaseHTTPRequestHandler):
             # categories
             if method == "POST" and path == "/api/categories":
                 self._require_admin()
-                name, kind = parse_category(self._read_json())
+                name, kind, description = parse_category(self._read_json())
+                description = description or ""
                 with conn:
                     pos = conn.execute("select coalesce(max(position), -1) + 1 from categories").fetchone()[0]
                     cid = conn.execute(
-                        "insert into categories(name, kind, position) values(?,?,?)", (name, kind, pos)
+                        "insert into categories(name, kind, description, position) values(?,?,?,?)",
+                        (name, kind, description, pos),
                     ).lastrowid
-                return self._json(201, {"id": cid, "name": name, "kind": kind})
+                return self._json(201, {"id": cid, "name": name, "kind": kind, "description": description})
 
             if method == "POST" and path == "/api/categories/order":
                 self._require_admin()
@@ -523,12 +532,17 @@ class Handler(BaseHTTPRequestHandler):
                 if method == "PUT":
                     if not row:
                         raise ApiError(404, "That category doesn't exist.")
-                    name, kind = parse_category(self._read_json())
+                    name, kind, description = parse_category(self._read_json())
+                    if description is None:
+                        description = row["description"]
                     with conn:
                         if kind != row["kind"]:  # votes mean something different now
                             conn.execute("delete from votes where category_id=?", (cid,))
-                        conn.execute("update categories set name=?, kind=? where id=?", (name, kind, cid))
-                    return self._json(200, {"id": cid, "name": name, "kind": kind})
+                        conn.execute(
+                            "update categories set name=?, kind=?, description=? where id=?",
+                            (name, kind, description, cid),
+                        )
+                    return self._json(200, {"id": cid, "name": name, "kind": kind, "description": description})
                 if method == "DELETE":
                     with conn:
                         conn.execute("delete from votes where category_id=?", (cid,))

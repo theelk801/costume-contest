@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#150E1B">
+<meta name="theme-color" content="#000000">
 <title>Contest Results</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -194,6 +194,7 @@
       h("h2", { text: cat.name }),
       h("span", { class: "cat-meta", text: (cat.kind === "group" ? "Linked sets" : "Individual") + " · " + votesText(cat.totalVotes) })
     )];
+    if (cat.description) kids.push(h("p", { class: "cat-desc-line", text: cat.description }));
     if (!cat.candidates.length) {
       kids.push(h("p", { class: "notice", text: cat.kind === "group" ? "No pairs or groups have been linked yet." : "No entries yet." }));
     } else if (!cat.winners.length) {

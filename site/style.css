@@ -1,17 +1,19 @@
-/* Shared look for the contest pages: plum-black ground, pumpkin accent, gold for winners.
+/* Shared look for the contest pages: black ground, orange as the main accent, red for picks and winners.
    One committed dark theme, by choice. */
 :root {
-  --ground: #150E1B;
-  --surface: #21172A;
-  --surface-2: #2C1F37;
-  --line: #3F2E4E;
-  --ink: #F3ECE1;
-  --ink-dim: #B9ABC6;
-  --ink-faint: #9A8AA8;
-  --pumpkin: #FF8A24;
-  --on-pumpkin: #1B1006;
-  --gold: #F4C95D;
-  --danger: #FF8F8F;
+  --ground: #000000;
+  --surface: #0F0E0E;
+  --surface-2: #1A1818;
+  --line: #302A28;
+  --ink: #F6F0EA;
+  --ink-dim: #BDB3AC;
+  --ink-faint: #9A908A;
+  --pumpkin: #FF7A1A;
+  --on-pumpkin: #140A02;
+  --blood: #D92B26;
+  --on-blood: #FFFFFF;
+  --blood-text: #FF6B60;
+  --danger: #FF6B60;
   --font-display: "Shrikhand", "Chalkboard SE", Georgia, serif;
   --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -49,7 +51,7 @@ h2.section { font: 700 1.3rem/1.2 var(--font-body); }
 a.pill:hover { border-color: var(--ink-dim); color: var(--ink); }
 a.pill[aria-current="page"] { color: var(--ink); border-color: var(--pumpkin); }
 .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pumpkin); }
-.pill.closed .dot { background: var(--gold); }
+.pill.closed .dot { background: var(--blood); }
 .pill.setup .dot { background: var(--ink-faint); }
 .pill.state { color: var(--ink); }
 
@@ -109,20 +111,20 @@ textarea { resize: vertical; min-height: 96px; }
   font: 600 .95rem/1 var(--font-body); cursor: pointer;
 }
 .tab[aria-selected="true"] { border-color: var(--pumpkin); background: var(--surface); }
-.tab .tick { color: var(--pumpkin); font-weight: 700; }
+.tab .tick { color: var(--blood-text); font-weight: 700; }
 .cat-note { color: var(--ink-dim); }
 
 /* gallery cards: one entry, or a linked set side by side */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 20px; align-items: start; }
 .card { display: flex; flex-direction: column; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.card.picked { border-color: var(--pumpkin); box-shadow: 0 0 0 1px var(--pumpkin); }
+.card.picked { border-color: var(--blood); box-shadow: 0 0 0 1px var(--blood); }
 .group-note { padding: 14px 16px 12px; font: 500 .72rem/1.2 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--pumpkin); overflow-wrap: anywhere; }
 .members { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 1px; background: var(--line); }
 .member { background: var(--surface); min-width: 0; display: flex; flex-direction: column; }
 .photo { position: relative; aspect-ratio: 4 / 5; max-width: 100%; background: var(--surface-2); }
 .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 /* vote cards: show the whole photo, centered, in a capped-height box */
-.member .photo { aspect-ratio: auto; height: 230px; display: flex; align-items: center; justify-content: center; background: #0d0814; overflow: hidden; }
+.member .photo { aspect-ratio: auto; height: 230px; display: flex; align-items: center; justify-content: center; background: #000000; overflow: hidden; }
 .member .photo img { position: static; inset: auto; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; margin: auto; }
 @media (min-width: 640px) { .member .photo { height: 210px; } }
 
@@ -141,7 +143,7 @@ textarea { resize: vertical; min-height: 96px; }
 .done-list + .btn { margin-top: 18px; }
 .sum-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
 .sum-row .sum-thumbs { display: flex; flex: 0 0 auto; gap: 2px; }
-.sum-row .sum-thumbs img { width: 44px; height: 55px; object-fit: contain; background: #0d0814; border-radius: 6px; display: block; }
+.sum-row .sum-thumbs img { width: 44px; height: 55px; object-fit: contain; background: #000000; border-radius: 6px; display: block; }
 .sum-row .sum-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sum-cat { font: 500 .72rem/1.2 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--pumpkin); overflow-wrap: anywhere; }
 .sum-pick { font-weight: 600; overflow-wrap: anywhere; }
@@ -158,7 +160,7 @@ textarea { resize: vertical; min-height: 96px; }
 .card-foot { padding: 12px 16px 16px; }
 .btn-vote { width: 100%; background: transparent; border-color: var(--pumpkin); color: var(--pumpkin); }
 .btn-vote:hover { background: var(--surface-2); }
-.btn-vote[aria-pressed="true"] { background: var(--pumpkin); color: var(--on-pumpkin); }
+.btn-vote[aria-pressed="true"] { background: var(--blood); border-color: var(--blood); color: var(--on-blood); }
 @media (min-width: 640px) { .card.group { grid-column: span 2; } }
 
 .empty { padding: 36px 24px; border: 1px dashed var(--ink-faint); border-radius: 14px; color: var(--ink-dim); display: flex; flex-direction: column; gap: 8px; }
@@ -187,8 +189,10 @@ textarea { resize: vertical; min-height: 96px; }
 
 .cats { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .cat-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--ground); }
+.cat-row .cat-desc, .cat-add .cat-desc { grid-column: 1 / -1; min-height: 64px; }
+.cat-add .btn { grid-column: 1 / -1; justify-self: start; }
 .cat-row .ops { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.cat-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
+.cat-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 
 /* host: results */
 .host-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 16px; border: 1px dashed var(--ink-faint); border-radius: 14px; background: var(--surface); }
@@ -201,24 +205,25 @@ textarea { resize: vertical; min-height: 96px; }
 .cat-block { display: flex; flex-direction: column; gap: 16px; }
 .cat-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
 .cat-head h2 { font: 400 clamp(1.5rem, 4vw, 2.1rem)/1.1 var(--font-display); }
+.cat-desc-line { color: var(--ink-dim); max-width: 70ch; margin-top: -6px; }
 .cat-meta { font: 500 .8rem/1 var(--font-mono); color: var(--ink-dim); }
 .winners { display: grid; gap: 16px; }
-.winner-card { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); border: 2px solid var(--gold); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.winner-card { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); border: 2px solid var(--blood); border-radius: 14px; background: var(--surface); overflow: hidden; }
 .winner-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 2px; background: var(--line); align-content: start; }
 .winner-body { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 24px; min-width: 0; }
-.winner-kicker { font: 400 clamp(1.2rem, 4vw, 1.7rem)/1.1 var(--font-display); color: var(--gold); }
+.winner-kicker { font: 400 clamp(1.2rem, 4vw, 1.7rem)/1.1 var(--font-display); color: var(--blood-text); }
 .winner-title { font: 700 clamp(1.4rem, 4vw, 2rem)/1.15 var(--font-body); overflow-wrap: anywhere; }
 .winner-who { color: var(--ink-dim); font-size: 1.05rem; overflow-wrap: anywhere; }
 .winner-member { display: flex; flex-direction: column; gap: 2px; }
 .winner-member .mt { font-weight: 700; overflow-wrap: anywhere; }
 .winner-member .mw { color: var(--ink-dim); overflow-wrap: anywhere; }
-.winner-votes { font: 500 1rem/1 var(--font-mono); color: var(--gold); }
+.winner-votes { font: 500 1rem/1 var(--font-mono); color: var(--blood-text); }
 
 .rank-list { display: flex; flex-direction: column; gap: 10px; }
 .rank-row { display: grid; grid-template-columns: 36px auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-.rank-row.win { border-color: var(--gold); }
+.rank-row.win { border-color: var(--blood); }
 .rank-row .rk { font: 500 1.1rem/1 var(--font-mono); color: var(--ink-dim); text-align: center; font-variant-numeric: tabular-nums; }
-.rank-row.win .rk { color: var(--gold); }
+.rank-row.win .rk { color: var(--blood-text); }
 .thumbs { display: flex; gap: 4px; }
 .thumbs img { width: 52px; aspect-ratio: 4 / 5; border-radius: 8px; object-fit: cover; background: var(--surface-2); }
 .rank-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -228,7 +233,7 @@ textarea { resize: vertical; min-height: 96px; }
 .rank-n { font: 500 1rem/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 .bar { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--pumpkin); border-radius: 5px; }
-.rank-row.win .bar > span { background: var(--gold); }
+.rank-row.win .bar > span { background: var(--blood); }
 
 /* home page */
 .tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }

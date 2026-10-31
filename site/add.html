@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#150E1B">
+<meta name="theme-color" content="#000000">
 <title>Add Costumes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -99,6 +99,7 @@
           <option value="individual">Individual costumes</option>
           <option value="group">Linked sets (couples, groups)</option>
         </select>
+        <textarea id="cat-desc" class="cat-desc" rows="2" maxlength="300" aria-label="New category description (optional)" placeholder="Description guests will see (optional), like: Most frightening costume of the night"></textarea>
         <button type="submit" class="btn btn-primary">Add category</button>
       </form>
     </section>
@@ -118,7 +119,7 @@
     fTitle: $("f-title"), fName: $("f-name"), fDesc: $("f-desc"), count: $("desc-count"), fLink: $("f-link"),
     save: $("f-save"), cancel: $("f-cancel"), formErr: $("form-err"),
     entries: $("entries"), empty: $("entries-empty"), listCount: $("list-count"),
-    cats: $("cats"), catForm: $("cat-form"), catName: $("cat-name"), catKind: $("cat-kind")
+    cats: $("cats"), catForm: $("cat-form"), catName: $("cat-name"), catKind: $("cat-kind"), catDesc: $("cat-desc")
   };
   var S = { costumes: [], groups: [], categories: [], phase: "setup", editing: null, photo: null, thumb: null, saving: false };
 
@@ -397,9 +398,11 @@
         h("option", { value: "group", text: "Linked sets (couples, groups)" })
       );
       kind.value = cat.kind;
+      var desc = h("textarea", { rows: "2", maxlength: "300", class: "cat-desc", "aria-label": "Category description (optional)", placeholder: "Description guests will see (optional)" });
+      desc.value = cat.description || "";
       var save = ghostBtn("Save", async function () {
         try {
-          await C.api("/api/categories/" + cat.id, { method: "PUT", body: { name: name.value.trim(), kind: kind.value }, admin: true });
+          await C.api("/api/categories/" + cat.id, { method: "PUT", body: { name: name.value.trim(), kind: kind.value, description: desc.value.trim() }, admin: true });
           C.toast("Category saved.");
           await load();
         } catch (e) { fail(e); }
@@ -410,7 +413,7 @@
         try { await C.api("/api/categories/" + cat.id, { method: "DELETE", admin: true }); C.toast("Category deleted."); await load(); }
         catch (e) { fail(e); }
       });
-      els.cats.append(h("div", { class: "cat-row" }, name, kind, h("div", { class: "ops" }, save, up, down, del)));
+      els.cats.append(h("div", { class: "cat-row" }, name, kind, desc, h("div", { class: "ops" }, save, up, down, del)));
     });
   }
 
@@ -419,8 +422,9 @@
     var name = els.catName.value.trim();
     if (!name) { els.catName.focus(); return; }
     try {
-      await C.api("/api/categories", { method: "POST", body: { name: name, kind: els.catKind.value }, admin: true });
+      await C.api("/api/categories", { method: "POST", body: { name: name, kind: els.catKind.value, description: els.catDesc.value.trim() }, admin: true });
       els.catName.value = "";
+      els.catDesc.value = "";
       C.toast("Added " + name + ".");
       await load();
     } catch (e) { fail(e); }
